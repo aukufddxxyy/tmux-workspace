@@ -81,8 +81,22 @@ panes:
 
 ## Install
 
-Put `bin/tms` on your `PATH`, for example by symlinking it:
+Put `bin/tms` on your `PATH` with the Makefile:
 
 ```sh
-ln -s /absolute/path/to/tmux-scripts/bin/tms ~/.local/bin/tms
+make install
 ```
+
+By default this links `bin/tms` to `~/.local/bin/tms`. Override the destination when needed:
+
+```sh
+make install BINDIR=/usr/local/bin
+```
+
+Create a starter project layout in the current directory:
+
+```sh
+make config
+```
+
+`make config` creates `.tmux-layout.yml` from `.tmux-layout.example.yml` only when the file is missing; it will not overwrite an existing layout.
