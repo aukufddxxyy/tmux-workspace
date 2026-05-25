@@ -37,6 +37,10 @@ Inside Git, the name is anchored to the worktree root:
 
 The logical separator is `:`, but the tmux-safe session name uses `_`.
 
+When attaching from a terminal emulator such as Ghostty, `tms` sets the tab title
+to the readable session display name, such as `repo:main`, so multiple workspace
+tabs stay distinguishable.
+
 ## Preset Document
 
 ```yaml

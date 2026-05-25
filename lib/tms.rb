@@ -14,6 +14,18 @@ module Tms
   SessionIdentity = Struct.new(:display_name, :tmux_name, keyword_init: true)
   Preset = Struct.new(:name, :layout, keyword_init: true)
 
+  module TerminalTitle
+    module_function
+
+    def sequence(title)
+      "\033]0;#{sanitize(title)}\a"
+    end
+
+    def sanitize(title)
+      title.to_s.delete("\033\a").gsub(/[[:cntrl:]]/, "")
+    end
+  end
+
   module SessionName
     module_function
 
@@ -372,6 +384,13 @@ module Tms
       end
     end
 
+    def set_terminal_title(session, title)
+      run!("tmux", "set-option", "-t", session, "set-titles", "on")
+      run!("tmux", "set-option", "-t", session, "set-titles-string", TerminalTitle.sanitize(title))
+    rescue TmuxError
+      nil
+    end
+
     def apply(step)
       type, *args = step
       case type
@@ -442,6 +461,7 @@ module Tms
       @stdin = stdin
       @tmux = tmux
       @git = git
+      @env = env
       @options = {
         launch_directory: Dir.pwd,
         attach: true,
@@ -459,6 +479,7 @@ module Tms
           @tmux.kill_session(identity.tmux_name)
         else
           @out.puts "Attaching existing session #{identity.tmux_name}"
+          prepare_terminal_title(identity)
           enter_or_print(identity.tmux_name)
           return 0
         end
@@ -466,6 +487,7 @@ module Tms
 
       layout = selected_layout(launch_directory)
       TmuxPlan.build(session: identity.tmux_name, start_directory: launch_directory, layout: layout).execute(tmux: @tmux)
+      prepare_terminal_title(identity)
       enter_or_print(identity.tmux_name)
       0
     rescue Error, OptionParser::ParseError => error
@@ -516,6 +538,18 @@ module Tms
         @out.puts "Session #{name} is ready."
         @out.puts "Attach with: tmux attach-session -t #{Shellwords.escape(name)}"
       end
+    end
+
+    def prepare_terminal_title(identity)
+      @tmux.set_terminal_title(identity.tmux_name, identity.display_name) if @tmux.respond_to?(:set_terminal_title)
+      return unless @options[:attach] && terminal? && !inside_tmux?
+
+      @out.print TerminalTitle.sequence(identity.display_name)
+      @out.flush if @out.respond_to?(:flush)
+    end
+
+    def inside_tmux?
+      @env["TMUX"] && !@env["TMUX"].empty?
     end
 
     def terminal?

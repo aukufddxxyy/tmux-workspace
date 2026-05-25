@@ -50,6 +50,10 @@ class TmsTest < Minitest::Test
     assert_equal "repo_repo-feature", name.tmux_name
   end
 
+  def test_terminal_title_sequence_uses_sanitized_display_name
+    assert_equal "\033]0;repo:main\a", Tms::TerminalTitle.sequence("repo:\033main\a")
+  end
+
   def test_selects_default_preset
     doc = Tms::PresetDocument.load_yaml(<<~YAML)
       presets:
@@ -232,6 +236,39 @@ class TmsTest < Minitest::Test
     assert_equal false, tmux.entered?
   end
 
+  def test_cli_configures_terminal_title_for_existing_session_before_attach_hint
+    tmux = fake_tmux(session_exists: true)
+    cli = Tms::CLI.new(
+      ["-C", "/work/plain project"],
+      env: {},
+      out: StringIO.new,
+      err: StringIO.new,
+      stdin: StringIO.new,
+      tmux: tmux,
+      git: fake_git(false)
+    )
+
+    assert_equal 0, cli.run
+    assert_equal ["plain_project", "plain project"], tmux.terminal_title
+  end
+
+  def test_cli_prints_terminal_title_when_attaching_from_terminal
+    tmux = fake_tmux(session_exists: true)
+    out = tty_string_io
+    cli = Tms::CLI.new(
+      ["-C", "/work/plain project"],
+      env: {},
+      out: out,
+      err: StringIO.new,
+      stdin: tty_string_io,
+      tmux: tmux,
+      git: fake_git(false)
+    )
+
+    assert_equal 0, cli.run
+    assert_includes out.string, Tms::TerminalTitle.sequence("plain project")
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])
@@ -254,6 +291,16 @@ class TmsTest < Minitest::Test
       define_method(:enter_session) { |_name| @entered = true }
       define_method(:entered?) { @entered }
       define_method(:apply) { |_step| }
+      define_method(:set_terminal_title) { |session, title| @terminal_title = [session, title] }
+      define_method(:terminal_title) { @terminal_title }
+    end.new
+  end
+
+  def tty_string_io
+    Class.new(StringIO) do
+      def tty?
+        true
+      end
     end.new
   end
 end
