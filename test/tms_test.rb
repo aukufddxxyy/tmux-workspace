@@ -3,6 +3,7 @@
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
+require "stringio"
 
 require_relative "../lib/tms"
 
@@ -180,6 +181,23 @@ class TmsTest < Minitest::Test
     assert_match(/Cannot read/, error.message)
   end
 
+  def test_non_tty_cli_does_not_attempt_to_attach_created_session
+    tmux = fake_tmux(session_exists: false)
+    out = StringIO.new
+    cli = Tms::CLI.new(
+      [],
+      env: {},
+      out: out,
+      err: StringIO.new,
+      stdin: StringIO.new,
+      tmux: tmux,
+      git: fake_git(false)
+    )
+
+    assert_equal 0, cli.run
+    assert_equal false, tmux.entered?
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])
@@ -187,6 +205,21 @@ class TmsTest < Minitest::Test
       define_method(:inside_work_tree?) { |_dir| inside }
       define_method(:common_dir) { |_dir| common_dir }
       define_method(:worktrees) { |_dir| worktrees }
+    end.new
+  end
+
+  def fake_tmux(session_exists:)
+    Class.new do
+      define_method(:initialize) do
+        @session_exists = session_exists
+        @entered = false
+      end
+
+      define_method(:session_exists?) { |_name| @session_exists }
+      define_method(:kill_session) { |_name| @session_exists = false }
+      define_method(:enter_session) { |_name| @entered = true }
+      define_method(:entered?) { @entered }
+      define_method(:apply) { |_step| }
     end.new
   end
 end

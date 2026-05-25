@@ -363,9 +363,9 @@ module Tms
 
     def enter_session(name)
       if ENV["TMUX"] && !ENV["TMUX"].empty?
-        run!("tmux", "switch-client", "-t", name)
+        run_interactive!("tmux", "switch-client", "-t", name)
       else
-        run!("tmux", "attach-session", "-t", name)
+        run_interactive!("tmux", "attach-session", "-t", name)
       end
     end
 
@@ -419,17 +419,26 @@ module Tms
 
       output
     end
+
+    def run_interactive!(*argv)
+      return if system(*argv)
+
+      raise TmuxError, "Command failed: #{argv.shelljoin}"
+    end
   end
 
   class CLI
-    def self.run(argv, env: ENV, out: $stdout, err: $stderr)
-      new(argv, env: env, out: out, err: err).run
+    def self.run(argv, env: ENV, out: $stdout, err: $stderr, stdin: $stdin)
+      new(argv, env: env, out: out, err: err, stdin: stdin).run
     end
 
-    def initialize(argv, env:, out:, err:)
+    def initialize(argv, env:, out:, err:, stdin: $stdin, tmux: Tmux.new, git: Git.new)
       @argv = argv.dup
       @out = out
       @err = err
+      @stdin = stdin
+      @tmux = tmux
+      @git = git
       @options = {
         launch_directory: Dir.pwd,
         attach: true,
@@ -440,22 +449,21 @@ module Tms
     def run
       parse!
       launch_directory = File.expand_path(@options[:launch_directory])
-      identity = SessionName.resolve(launch_directory)
-      tmux = Tmux.new
+      identity = SessionName.resolve(launch_directory, git: @git)
 
-      if tmux.session_exists?(identity.tmux_name)
+      if @tmux.session_exists?(identity.tmux_name)
         if @options[:recreate]
-          tmux.kill_session(identity.tmux_name)
+          @tmux.kill_session(identity.tmux_name)
         else
           @out.puts "Attaching existing session #{identity.tmux_name}"
-          tmux.enter_session(identity.tmux_name) if @options[:attach]
+          enter_or_print(identity.tmux_name)
           return 0
         end
       end
 
       layout = selected_layout(launch_directory)
-      TmuxPlan.build(session: identity.tmux_name, start_directory: launch_directory, layout: layout).execute(tmux: tmux)
-      tmux.enter_session(identity.tmux_name) if @options[:attach]
+      TmuxPlan.build(session: identity.tmux_name, start_directory: launch_directory, layout: layout).execute(tmux: @tmux)
+      enter_or_print(identity.tmux_name)
       0
     rescue Error, OptionParser::ParseError => error
       @err.puts "tms: #{error.message}"
@@ -494,6 +502,21 @@ module Tms
 
       document = PresetDocument.load_file(preset_path)
       PresetSelection.select(document, @options[:preset]).layout
+    end
+
+    def enter_or_print(name)
+      return unless @options[:attach]
+
+      if terminal?
+        @tmux.enter_session(name)
+      else
+        @out.puts "Session #{name} is ready."
+        @out.puts "Attach with: tmux attach-session -t #{Shellwords.escape(name)}"
+      end
+    end
+
+    def terminal?
+      @stdin.respond_to?(:tty?) && @stdin.tty? && @out.respond_to?(:tty?) && @out.tty?
     end
   end
 end
