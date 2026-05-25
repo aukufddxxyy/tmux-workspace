@@ -1,7 +1,8 @@
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 TARGET ?= tms
-CONFIG ?= .tmux-layout.yml
+CONFIG_DIR ?= $(HOME)/.config/tmux-scripts
+CONFIG ?= $(CONFIG_DIR)/layouts.yml
 
 TMS := $(CURDIR)/bin/tms
 LINK := $(BINDIR)/$(TARGET)
@@ -31,12 +32,14 @@ config:
 	@if [ -e "$(CONFIG)" ]; then \
 		printf 'Keeping existing %s\n' "$(CONFIG)"; \
 	else \
+		mkdir -p "$$(dirname "$(CONFIG)")"; \
 		cp "$(CONFIG_EXAMPLE)" "$(CONFIG)"; \
 		printf 'Created %s from %s\n' "$(CONFIG)" "$(CONFIG_EXAMPLE)"; \
 	fi
 
 test:
 	@ruby test/tms_test.rb
+	@ruby test/makefile_test.rb
 
 check: test
 	@ruby -c lib/tms.rb

@@ -93,10 +93,16 @@ By default this links `bin/tms` to `~/.local/bin/tms`. Override the destination 
 make install BINDIR=/usr/local/bin
 ```
 
-Create a starter project layout in the current directory:
+Create a starter global layout:
 
 ```sh
 make config
 ```
 
-`make config` creates `.tmux-layout.yml` from `.tmux-layout.example.yml` only when the file is missing; it will not overwrite an existing layout.
+`make config` creates `~/.config/tmux-scripts/layouts.yml` from `.tmux-layout.example.yml` only when the file is missing; it will not overwrite an existing layout.
+
+To create a project-local override instead, pass `CONFIG` explicitly:
+
+```sh
+make config CONFIG=.tmux-layout.yml
+```

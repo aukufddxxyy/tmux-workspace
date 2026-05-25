@@ -173,6 +173,40 @@ class TmsTest < Minitest::Test
     assert_includes plan.steps, [:split_window, "repo_main:0.0", "repo_main:0.2", "-h", "/repo", 71]
   end
 
+  def test_splits_sibling_panes_before_descending_into_nested_layouts
+    layout = Tms::PaneLayout.branch(
+      "horizontal",
+      [
+        Tms::PaneLayout.branch(
+          "vertical",
+          [
+            Tms::PaneLayout.leaf(title: "top-left"),
+            Tms::PaneLayout.leaf(title: "bottom-left")
+          ],
+          ratio: [50, 50]
+        ),
+        Tms::PaneLayout.branch(
+          "vertical",
+          [
+            Tms::PaneLayout.leaf(title: "top-right"),
+            Tms::PaneLayout.leaf(title: "bottom-right")
+          ],
+          ratio: [50, 50]
+        )
+      ],
+      ratio: [50, 50]
+    )
+
+    plan = Tms::TmuxPlan.build(session: "repo_main", start_directory: "/repo", layout: layout)
+    split_steps = plan.steps.select { |step| step.first == :split_window }
+
+    assert_equal [
+      [:split_window, "repo_main:0.0", "repo_main:0.1", "-h", "/repo", 50],
+      [:split_window, "repo_main:0.0", "repo_main:0.2", "-v", "/repo", 50],
+      [:split_window, "repo_main:0.1", "repo_main:0.3", "-v", "/repo", 50]
+    ], split_steps
+  end
+
   def test_errors_when_explicit_preset_file_is_missing
     error = assert_raises(Tms::ConfigError) do
       Tms::PresetDocument.load_file("/definitely/missing.yml")

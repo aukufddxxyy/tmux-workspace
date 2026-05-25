@@ -315,16 +315,19 @@ module Tms
         return
       end
 
-      first, *rest = layout.panes
-      materialize(first, target, cwd)
+      targets = [target]
 
-      rest.each_with_index do |pane, index|
+      layout.panes[1..-1].each_with_index do |pane, index|
         target_index = @next_pane_index
         @next_pane_index += 1
         new_target = target.sub(/\.\d+\z/, ".#{target_index}")
         size = split_percentage(layout.ratio, index + 1)
         add(:split_window, target, new_target, layout.direction_flag, resolve_cwd(cwd, pane.cwd), size)
-        materialize(pane, new_target, cwd)
+        targets << new_target
+      end
+
+      layout.panes.zip(targets).each do |pane, pane_target|
+        materialize(pane, pane_target, cwd)
       end
     end
 
