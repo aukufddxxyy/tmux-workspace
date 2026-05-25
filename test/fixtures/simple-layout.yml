@@ -1,0 +1,5 @@
+split: horizontal
+panes:
+  - title: one
+    command: "printf ready-one"
+  - title: two

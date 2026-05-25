@@ -1,0 +1,14 @@
+presets:
+  default:
+    layout:
+      split: horizontal
+      ratio: [30, 70]
+      panes:
+        - title: editor
+          command: nvim
+        - split: vertical
+          ratio: [60, 40]
+          panes:
+            - title: server
+              command: pnpm dev
+            - title: shell
