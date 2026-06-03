@@ -490,7 +490,7 @@ module Tms
               layout: selected.layout
             ).execute(tmux: @tmux)
           else
-            @out.puts "Attaching existing session #{identity.tmux_name}"
+            raise ConfigError, "--append-window for existing sessions is not implemented yet"
           end
         else
           TmuxPlan.build(

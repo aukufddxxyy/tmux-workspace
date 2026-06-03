@@ -423,6 +423,34 @@ class TmsTest < Minitest::Test
     end
   end
 
+  def test_append_window_existing_session_fails_until_append_plan_exists
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          default:
+            layout:
+              command: nvim
+      YAML
+      tmux = fake_tmux(session_exists: true)
+      err = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["-A", "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: err,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 1, cli.run
+      assert_includes err.string, "--append-window for existing sessions is not implemented yet"
+      assert_equal [], tmux.steps
+      assert_equal false, tmux.entered?
+    end
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])
