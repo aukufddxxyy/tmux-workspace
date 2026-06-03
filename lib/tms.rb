@@ -307,6 +307,15 @@ module Tms
       end
     end
 
+    def self.append_window(session:, window_name:, start_directory:, layout:)
+      target = "#{session}:append.0"
+      new.tap do |plan|
+        plan.add(:new_window, session, target, window_name, start_directory)
+        plan.materialize(layout, target, start_directory)
+        plan.add(:select_pane, target)
+      end
+    end
+
     def initialize
       @steps = []
       @next_pane_index = 1
@@ -401,6 +410,11 @@ module Tms
         argv.concat(["-n", window_name]) if window_name && !window_name.empty?
         pane_id = run!(*argv).strip
         @pane_targets["#{session}:0.0"] = pane_id
+      when :new_window
+        session, target, window_name, cwd = args
+        argv = ["tmux", "new-window", "-d", "-P", "-F", '#{pane_id}', "-t", session, "-c", cwd]
+        argv.concat(["-n", window_name]) if window_name && !window_name.empty?
+        @pane_targets[target] = run!(*argv).strip
       when :split_window
         target, new_target, flag, cwd, size = args
         argv = ["tmux", "split-window", "-P", "-F", '#{pane_id}', "-t", pane_target(target), flag, "-c", cwd]
@@ -482,16 +496,12 @@ module Tms
         selected = selected_layout(launch_directory)
 
         if @tmux.session_exists?(identity.tmux_name)
-          if TmuxPlan.respond_to?(:append_window)
-            TmuxPlan.append_window(
-              session: identity.tmux_name,
-              window_name: selected.window_name,
-              start_directory: launch_directory,
-              layout: selected.layout
-            ).execute(tmux: @tmux)
-          else
-            raise ConfigError, "--append-window for existing sessions is not implemented yet"
-          end
+          TmuxPlan.append_window(
+            session: identity.tmux_name,
+            window_name: selected.window_name,
+            start_directory: launch_directory,
+            layout: selected.layout
+          ).execute(tmux: @tmux)
         else
           TmuxPlan.build(
             session: identity.tmux_name,

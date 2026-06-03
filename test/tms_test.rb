@@ -160,6 +160,33 @@ class TmsTest < Minitest::Test
     assert_includes plan.steps, [:open_shell, "repo_main:0.2", "shell", "/repo/apps/web"]
   end
 
+  def test_name_initial_window_when_building_session_plan
+    layout = Tms::PaneLayout.leaf(title: "shell")
+
+    plan = Tms::TmuxPlan.build(session: "repo_main", start_directory: "/repo", layout: layout, window_name: "dev")
+
+    assert_equal [:new_session, "repo_main", "/repo", "dev"], plan.steps.first
+  end
+
+  def test_append_window_plan_materializes_layout_into_append_window
+    layout = Tms::PaneLayout.branch(
+      "horizontal",
+      [
+        Tms::PaneLayout.leaf(command: "nvim", title: "editor"),
+        Tms::PaneLayout.leaf(title: "shell")
+      ]
+    )
+
+    plan = Tms::TmuxPlan.append_window(session: "repo_main", window_name: "dev", start_directory: "/repo", layout: layout)
+
+    assert_equal [:new_window, "repo_main", "repo_main:append.0", "dev", "/repo"], plan.steps.first
+    refute_includes plan.steps.map(&:first), :new_session
+    assert_includes plan.steps, [:split_window, "repo_main:append.0", "repo_main:append.1", "-h", "/repo", nil]
+    assert_includes plan.steps, [:send_command, "repo_main:append.0", "nvim", "editor", "/repo"]
+    assert_includes plan.steps, [:open_shell, "repo_main:append.1", "shell", "/repo"]
+    assert_equal [:select_pane, "repo_main:append.0"], plan.steps.last
+  end
+
   def test_converts_three_pane_ratios_to_sequential_tmux_percentages
     layout = Tms::PaneLayout.branch(
       "horizontal",
@@ -423,7 +450,7 @@ class TmsTest < Minitest::Test
     end
   end
 
-  def test_append_window_existing_session_fails_until_append_plan_exists
+  def test_append_window_existing_session_applies_append_plan
     Dir.mktmpdir("tms-layout") do |dir|
       File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
         presets:
@@ -432,21 +459,21 @@ class TmsTest < Minitest::Test
               command: nvim
       YAML
       tmux = fake_tmux(session_exists: true)
-      err = StringIO.new
 
       cli = Tms::CLI.new(
         ["-A", "-C", dir, "--no-attach"],
         env: {},
         out: StringIO.new,
-        err: err,
+        err: StringIO.new,
         stdin: StringIO.new,
         tmux: tmux,
         git: fake_git(false)
       )
 
-      assert_equal 1, cli.run
-      assert_includes err.string, "--append-window for existing sessions is not implemented yet"
-      assert_equal [], tmux.steps
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_window, File.basename(dir).tr(" ", "_"), "#{File.basename(dir).tr(" ", "_")}:append.0", "default", dir]
+      assert_includes tmux.steps, [:send_command, "#{File.basename(dir).tr(" ", "_")}:append.0", "nvim", nil, dir]
+      assert_includes tmux.steps, [:select_pane, "#{File.basename(dir).tr(" ", "_")}:append.0"]
       assert_equal false, tmux.entered?
     end
   end
