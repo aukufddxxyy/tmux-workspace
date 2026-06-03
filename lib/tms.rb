@@ -13,6 +13,7 @@ module Tms
 
   SessionIdentity = Struct.new(:display_name, :tmux_name, keyword_init: true)
   Preset = Struct.new(:name, :layout, keyword_init: true)
+  SelectedLayout = Struct.new(:layout, :window_name, keyword_init: true)
 
   module TerminalTitle
     module_function
@@ -298,9 +299,9 @@ module Tms
   class TmuxPlan
     attr_reader :steps
 
-    def self.build(session:, start_directory:, layout:)
+    def self.build(session:, start_directory:, layout:, window_name: nil)
       new.tap do |plan|
-        plan.add(:new_session, session, start_directory)
+        plan.add(:new_session, session, start_directory, window_name)
         plan.materialize(layout, "#{session}:0.0", start_directory)
         plan.add(:select_pane, "#{session}:0.0")
       end
@@ -395,8 +396,10 @@ module Tms
       type, *args = step
       case type
       when :new_session
-        session, cwd = args
-        pane_id = run!("tmux", "new-session", "-d", "-P", "-F", '#{pane_id}', "-s", session, "-c", cwd).strip
+        session, cwd, window_name = args
+        argv = ["tmux", "new-session", "-d", "-P", "-F", '#{pane_id}', "-s", session, "-c", cwd]
+        argv.concat(["-n", window_name]) if window_name && !window_name.empty?
+        pane_id = run!(*argv).strip
         @pane_targets["#{session}:0.0"] = pane_id
       when :split_window
         target, new_target, flag, cwd, size = args
@@ -475,6 +478,34 @@ module Tms
       launch_directory = File.expand_path(@options[:launch_directory])
       identity = SessionName.resolve(launch_directory, git: @git)
 
+      if @options[:append_window]
+        selected = selected_layout(launch_directory)
+
+        if @tmux.session_exists?(identity.tmux_name)
+          if TmuxPlan.respond_to?(:append_window)
+            TmuxPlan.append_window(
+              session: identity.tmux_name,
+              window_name: selected.window_name,
+              start_directory: launch_directory,
+              layout: selected.layout
+            ).execute(tmux: @tmux)
+          else
+            @out.puts "Attaching existing session #{identity.tmux_name}"
+          end
+        else
+          TmuxPlan.build(
+            session: identity.tmux_name,
+            window_name: selected.window_name,
+            start_directory: launch_directory,
+            layout: selected.layout
+          ).execute(tmux: @tmux)
+        end
+
+        prepare_terminal_title(identity)
+        enter_or_print(identity.tmux_name)
+        return 0
+      end
+
       if @tmux.session_exists?(identity.tmux_name)
         if @options[:recreate]
           @tmux.kill_session(identity.tmux_name)
@@ -486,8 +517,8 @@ module Tms
         end
       end
 
-      layout = selected_layout(launch_directory)
-      TmuxPlan.build(session: identity.tmux_name, start_directory: launch_directory, layout: layout).execute(tmux: @tmux)
+      selected = selected_layout(launch_directory)
+      TmuxPlan.build(session: identity.tmux_name, start_directory: launch_directory, layout: selected.layout).execute(tmux: @tmux)
       prepare_terminal_title(identity)
       enter_or_print(identity.tmux_name)
       0
@@ -522,14 +553,23 @@ module Tms
 
     def selected_layout(launch_directory)
       if @options[:layout]
-        return LayoutDocument.load_file(@options[:layout])
+        return SelectedLayout.new(
+          layout: LayoutDocument.load_file(@options[:layout]),
+          window_name: layout_window_name(@options[:layout])
+        )
       end
 
       preset_path = PresetLookup.find(explicit_file: @options[:file], launch_directory: launch_directory)
-      return PaneLayout.leaf unless File.file?(preset_path)
+      return SelectedLayout.new(layout: PaneLayout.leaf, window_name: "shell") unless File.file?(preset_path)
 
       document = PresetDocument.load_file(preset_path)
-      PresetSelection.select(document, @options[:preset]).layout
+      preset = PresetSelection.select(document, @options[:preset])
+      SelectedLayout.new(layout: preset.layout, window_name: preset.name)
+    end
+
+    def layout_window_name(path)
+      basename = File.basename(path.to_s, File.extname(path.to_s))
+      basename.empty? ? "layout" : basename
     end
 
     def enter_or_print(name)

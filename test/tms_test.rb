@@ -152,7 +152,7 @@ class TmsTest < Minitest::Test
 
     plan = Tms::TmuxPlan.build(session: "repo_main", start_directory: "/repo/apps/web", layout: layout)
 
-    assert_equal [:new_session, "repo_main", "/repo/apps/web"], plan.steps[0]
+    assert_equal [:new_session, "repo_main", "/repo/apps/web", nil], plan.steps[0]
     assert_includes plan.steps, [:split_window, "repo_main:0.0", "repo_main:0.1", "-h", "/repo/apps/web", 70]
     assert_includes plan.steps, [:split_window, "repo_main:0.1", "repo_main:0.2", "-v", "/repo/apps/web", 40]
     assert_includes plan.steps, [:send_command, "repo_main:0.0", "nvim", "editor", "/repo/apps/web"]
@@ -303,6 +303,126 @@ class TmsTest < Minitest::Test
     assert_includes err.string, "--append-window cannot be combined with --recreate"
   end
 
+  def test_append_window_uses_explicit_preset_name_for_new_session_window
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          default:
+            layout:
+              command: nvim
+          dev:
+            layout:
+              command: pnpm dev
+      YAML
+      tmux = fake_tmux(session_exists: false)
+
+      cli = Tms::CLI.new(
+        ["-A", "--preset", "dev", "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_session, File.basename(dir).tr(" ", "_"), dir, "dev"]
+    end
+  end
+
+  def test_append_window_uses_default_preset_name_when_selected_implicitly
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          default:
+            layout:
+              command: nvim
+      YAML
+      tmux = fake_tmux(session_exists: false)
+
+      cli = Tms::CLI.new(
+        ["-A", "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_session, File.basename(dir).tr(" ", "_"), dir, "default"]
+    end
+  end
+
+  def test_append_window_uses_single_preset_name_when_selected_implicitly
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          logs:
+            layout:
+              command: tail -f app.log
+      YAML
+      tmux = fake_tmux(session_exists: false)
+
+      cli = Tms::CLI.new(
+        ["-A", "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_session, File.basename(dir).tr(" ", "_"), dir, "logs"]
+    end
+  end
+
+  def test_append_window_uses_layout_file_basename_for_one_off_layout
+    Dir.mktmpdir("tms-layout") do |dir|
+      layout_path = File.join(dir, "debug.yml")
+      File.write(layout_path, <<~YAML)
+        command: ruby -v
+      YAML
+      tmux = fake_tmux(session_exists: false)
+
+      cli = Tms::CLI.new(
+        ["-A", "--layout", layout_path, "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_session, File.basename(dir).tr(" ", "_"), dir, "debug"]
+    end
+  end
+
+  def test_append_window_uses_shell_name_when_no_preset_file_exists
+    Dir.mktmpdir("tms-layout") do |dir|
+      tmux = fake_tmux(session_exists: false)
+
+      cli = Tms::CLI.new(
+        ["-A", "--file", File.join(dir, "missing-layouts.yml"), "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_session, File.basename(dir).tr(" ", "_"), dir, "shell"]
+    end
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])
@@ -318,13 +438,15 @@ class TmsTest < Minitest::Test
       define_method(:initialize) do
         @session_exists = session_exists
         @entered = false
+        @steps = []
       end
 
       define_method(:session_exists?) { |_name| @session_exists }
       define_method(:kill_session) { |_name| @session_exists = false }
       define_method(:enter_session) { |_name| @entered = true }
       define_method(:entered?) { @entered }
-      define_method(:apply) { |_step| }
+      define_method(:apply) { |step| @steps << step }
+      define_method(:steps) { @steps }
       define_method(:set_terminal_title) { |session, title| @terminal_title = [session, title] }
       define_method(:terminal_title) { @terminal_title }
     end.new
