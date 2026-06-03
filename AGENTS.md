@@ -18,7 +18,7 @@
 
 - Use `CONTEXT.md` vocabulary exactly: Workspace Session, Session Display Name, Tmux Session Name, Session Recreate, Primary Worktree, Worktree Root, Launch Directory, Pane Command, Layout Preset, Preset Document, Preset Lookup, Preset Selection, Pane Layout, Launch Override.
 - Session naming is Git-aware: non-Git directories use the launch directory name; Git-backed sessions are anchored to the Worktree Root, with the Primary Worktree displayed as `main` regardless of actual branch name. The tmux-safe name replaces `:` and whitespace with `_`.
-- Preset Lookup order is `--file`, nearest `.tmux-layout.yml` walking up from the Launch Directory, then `~/.config/tmux-scripts/layouts.yml`. If no preset file exists, `tms` creates a single shell pane.
+- Preset Lookup order is `--file`, nearest `.tmux-layout.yml` walking up from the Launch Directory, then `~/.config/tmux-workspace/layouts.yml`. If no preset file exists, `tms` creates a single shell pane.
 - Preset Selection prefers `default`, then the only preset when unambiguous; multiple non-default presets require `--preset`.
 - `--layout` is a Launch Override and reads a raw Pane Layout document; it cannot be combined with `--preset` or `--file`.
 

@@ -22,7 +22,7 @@ Preset documents are discovered in this order:
 
 1. `--file <path>`
 2. The nearest `.tmux-layout.yml` found by walking up from the launch directory
-3. `~/.config/tmux-scripts/layouts.yml`
+3. `~/.config/tmux-workspace/layouts.yml`
 
 Without `--preset`, `tms` selects `default`, then the only preset if the file has exactly one preset. If no preset file exists, it opens a single shell pane.
 
@@ -103,7 +103,7 @@ Create a starter global layout:
 make config
 ```
 
-`make config` creates `~/.config/tmux-scripts/layouts.yml` from `.tmux-layout.example.yml` only when the file is missing; it will not overwrite an existing layout.
+`make config` creates `~/.config/tmux-workspace/layouts.yml` from `.tmux-layout.example.yml` only when the file is missing; it will not overwrite an existing layout.
 
 To create a project-local override instead, pass `CONFIG` explicitly:
 

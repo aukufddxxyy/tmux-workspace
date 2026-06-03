@@ -12,7 +12,7 @@ class MakefileTest < Minitest::Test
       output, status = Open3.capture2e("make", "-n", "config", "HOME=#{home}", chdir: ROOT)
 
       assert status.success?, output
-      assert_includes output, File.join(home, ".config", "tmux-scripts", "layouts.yml")
+      assert_includes output, File.join(home, ".config", "tmux-workspace", "layouts.yml")
       refute_includes output, "cp \"#{File.join(ROOT, ".tmux-layout.example.yml")}\" \".tmux-layout.yml\""
     end
   end

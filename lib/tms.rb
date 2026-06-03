@@ -253,7 +253,7 @@ module Tms
     module_function
 
     LOCAL_FILE = ".tmux-layout.yml"
-    GLOBAL_FILE = File.join(Dir.home, ".config", "tmux-scripts", "layouts.yml")
+    GLOBAL_FILE = File.join(Dir.home, ".config", "tmux-workspace", "layouts.yml")
 
     def find(explicit_file: nil, launch_directory: Dir.pwd)
       return File.expand_path(explicit_file) if explicit_file

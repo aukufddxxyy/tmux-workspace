@@ -1,7 +1,7 @@
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 TARGET ?= tms
-CONFIG_DIR ?= $(HOME)/.config/tmux-scripts
+CONFIG_DIR ?= $(HOME)/.config/tmux-workspace
 CONFIG ?= $(CONFIG_DIR)/layouts.yml
 
 TMS := $(CURDIR)/bin/tms
