@@ -744,7 +744,7 @@ After the One-Off Layout section, add:
 - an implicit `default` preset names the window `default`
 - a single implicit preset uses that preset name
 - `--layout ./debug.yml` names the window `debug`
-- no preset file creates a single shell pane named `shell`
+- no preset file names the window `shell` and opens a single shell pane
 
 By default, `tms` enters the Workspace Session after appending the window. Add `--no-attach` to create the window without entering or switching the client.
 ```
