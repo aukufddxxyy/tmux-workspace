@@ -539,12 +539,13 @@ class TmsTest < Minitest::Test
               command: pnpm dev
       YAML
       tmux = fake_tmux(session_exists: true)
+      err = StringIO.new
 
       cli = Tms::CLI.new(
-        ["--preset", "dev", "-C", dir],
+        ["--preset", "missing", "-C", dir],
         env: {},
         out: tty_string_io,
-        err: StringIO.new,
+        err: err,
         stdin: tty_string_io,
         tmux: tmux,
         git: fake_git(false)
@@ -553,6 +554,7 @@ class TmsTest < Minitest::Test
       assert_equal 0, cli.run
       assert_equal [], tmux.steps
       assert_equal true, tmux.entered?
+      refute_match(/Unknown preset|Cannot read/, err.string)
     end
   end
 
