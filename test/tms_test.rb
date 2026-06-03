@@ -269,6 +269,40 @@ class TmsTest < Minitest::Test
     assert_includes out.string, Tms::TerminalTitle.sequence("plain project")
   end
 
+  def test_help_lists_append_window_option
+    out = StringIO.new
+
+    assert_raises(SystemExit) do
+      Tms::CLI.new(
+        ["--help"],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      ).run
+    end
+
+    assert_includes out.string, "-A, --append-window"
+  end
+
+  def test_append_window_cannot_be_combined_with_recreate
+    err = StringIO.new
+    cli = Tms::CLI.new(
+      ["--append-window", "--recreate"],
+      env: {},
+      out: StringIO.new,
+      err: err,
+      stdin: StringIO.new,
+      tmux: fake_tmux(session_exists: false),
+      git: fake_git(false)
+    )
+
+    assert_equal 1, cli.run
+    assert_includes err.string, "--append-window cannot be combined with --recreate"
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])

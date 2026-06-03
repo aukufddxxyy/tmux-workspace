@@ -465,7 +465,8 @@ module Tms
       @options = {
         launch_directory: Dir.pwd,
         attach: true,
-        recreate: false
+        recreate: false,
+        append_window: false
       }
     end
 
@@ -503,6 +504,7 @@ module Tms
         opts.on("-p", "--preset NAME", "Launch a named preset") { |value| @options[:preset] = value }
         opts.on("-f", "--file PATH", "Use a preset document") { |value| @options[:file] = value }
         opts.on("-l", "--layout PATH", "Use a complete one-off layout document") { |value| @options[:layout] = value }
+        opts.on("-A", "--append-window", "Append a window to the workspace session") { @options[:append_window] = true }
         opts.on("-C", "--directory PATH", "Launch as if invoked from PATH") { |value| @options[:launch_directory] = value }
         opts.on("--recreate", "Kill and recreate an existing session") { @options[:recreate] = true }
         opts.on("--no-attach", "Create or reuse the session without entering it") { @options[:attach] = false }
@@ -514,6 +516,7 @@ module Tms
 
       parser.parse!(@argv)
       raise ConfigError, "--layout cannot be combined with --preset or --file" if @options[:layout] && (@options[:preset] || @options[:file])
+      raise ConfigError, "--append-window cannot be combined with --recreate" if @options[:append_window] && @options[:recreate]
       raise ConfigError, "Unexpected arguments: #{@argv.join(" ")}" unless @argv.empty?
     end
 
