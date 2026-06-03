@@ -478,6 +478,84 @@ class TmsTest < Minitest::Test
     end
   end
 
+  def test_existing_session_with_append_window_adds_window_and_enters
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          dev:
+            layout:
+              command: pnpm dev
+      YAML
+      tmux = fake_tmux(session_exists: true)
+
+      cli = Tms::CLI.new(
+        ["-A", "--preset", "dev", "-C", dir],
+        env: {},
+        out: tty_string_io,
+        err: StringIO.new,
+        stdin: tty_string_io,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_window, File.basename(dir).tr(" ", "_"), "#{File.basename(dir).tr(" ", "_")}:append.0", "dev", dir]
+      assert_equal true, tmux.entered?
+    end
+  end
+
+  def test_existing_session_with_append_window_and_no_attach_does_not_enter
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          dev:
+            layout:
+              command: pnpm dev
+      YAML
+      tmux = fake_tmux(session_exists: true)
+
+      cli = Tms::CLI.new(
+        ["-A", "--preset", "dev", "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes tmux.steps, [:new_window, File.basename(dir).tr(" ", "_"), "#{File.basename(dir).tr(" ", "_")}:append.0", "dev", dir]
+      assert_equal false, tmux.entered?
+    end
+  end
+
+  def test_existing_session_without_append_window_keeps_early_attach_behavior
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          dev:
+            layout:
+              command: pnpm dev
+      YAML
+      tmux = fake_tmux(session_exists: true)
+
+      cli = Tms::CLI.new(
+        ["--preset", "dev", "-C", dir],
+        env: {},
+        out: tty_string_io,
+        err: StringIO.new,
+        stdin: tty_string_io,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_equal [], tmux.steps
+      assert_equal true, tmux.entered?
+    end
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])
