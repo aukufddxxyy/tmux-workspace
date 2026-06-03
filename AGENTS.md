@@ -21,6 +21,7 @@
 - Preset Lookup order is `--file`, nearest `.tmux-layout.yml` walking up from the Launch Directory, then `~/.config/tmux-workspace/layouts.yml`. If no preset file exists, `tms` creates a single shell pane.
 - Preset Selection prefers `default`, then the only preset when unambiguous; multiple non-default presets require `--preset`.
 - `--layout` is a Launch Override and reads a raw Pane Layout document; it cannot be combined with `--preset` or `--file`.
+- `-A` / `--append-window` is an append launch mode for the target Workspace Session: it reuses Preset Selection or Launch Override to create a new tmux window, names that window from the selected layout source, and cannot be combined with Session Recreate.
 
 ## Implementation Gotchas
 

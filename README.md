@@ -9,10 +9,14 @@ bin/tms
 bin/tms --preset dev
 bin/tms --file ./layouts.yml --preset dev
 bin/tms --layout ./one-off-layout.yml
+bin/tms --append-window --preset dev
+bin/tms -A --layout ./debug.yml
 bin/tms --recreate --preset dev
 ```
 
 If the target session already exists, `tms` attaches to it. Use `--recreate` to kill and rebuild that session from the selected layout.
+
+Use `-A, --append-window` to add a new window to the target Workspace Session instead of only attaching to an existing session. The new window uses the selected preset or one-off layout. When the Workspace Session does not exist yet, append-window mode creates it and names the initial window from the selected layout. `--append-window` cannot be combined with `--recreate`.
 
 When run inside tmux, `tms` switches the current client to the target session. Outside tmux, it attaches normally.
 
@@ -82,6 +86,18 @@ panes:
   - command: nvim
   - title: shell
 ```
+
+## Append Window
+
+`--append-window` derives the tmux window name from the selected layout source:
+
+- `--preset dev` names the window `dev`
+- an implicit `default` preset names the window `default`
+- a single implicit preset uses that preset name
+- `--layout ./debug.yml` names the window `debug`
+- no preset file creates a single shell pane named `shell`
+
+By default, `tms` enters the Workspace Session after appending the window. Add `--no-attach` to create the window without entering or switching the client.
 
 ## Install
 
