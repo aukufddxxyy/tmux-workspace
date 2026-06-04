@@ -312,12 +312,13 @@ class TmsTest < Minitest::Test
     end
 
     assert_includes out.string, "-A, --append-window"
+    assert_includes out.string, "-R, --recreate"
   end
 
   def test_append_window_cannot_be_combined_with_recreate
     err = StringIO.new
     cli = Tms::CLI.new(
-      ["--append-window", "--recreate"],
+      ["-A", "-R"],
       env: {},
       out: StringIO.new,
       err: err,
@@ -328,6 +329,26 @@ class TmsTest < Minitest::Test
 
     assert_equal 1, cli.run
     assert_includes err.string, "--append-window cannot be combined with --recreate"
+  end
+
+  def test_recreate_short_option_rebuilds_existing_session
+    Dir.mktmpdir("tms-layout") do |dir|
+      tmux = fake_tmux(session_exists: true)
+
+      cli = Tms::CLI.new(
+        ["-R", "--file", File.join(dir, "missing-layouts.yml"), "-C", dir, "--no-attach"],
+        env: {},
+        out: StringIO.new,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_equal [File.basename(dir).tr(" ", "_")], tmux.killed_sessions
+      assert_includes tmux.steps, [:new_session, File.basename(dir).tr(" ", "_"), dir, nil]
+    end
   end
 
   def test_append_window_uses_explicit_preset_name_for_new_session_window
@@ -574,14 +595,16 @@ class TmsTest < Minitest::Test
         @session_exists = session_exists
         @entered = false
         @steps = []
+        @killed_sessions = []
       end
 
       define_method(:session_exists?) { |_name| @session_exists }
-      define_method(:kill_session) { |_name| @session_exists = false }
+      define_method(:kill_session) { |name| @killed_sessions << name; @session_exists = false }
       define_method(:enter_session) { |_name| @entered = true }
       define_method(:entered?) { @entered }
       define_method(:apply) { |step| @steps << step }
       define_method(:steps) { @steps }
+      define_method(:killed_sessions) { @killed_sessions }
       define_method(:set_terminal_title) { |session, title| @terminal_title = [session, title] }
       define_method(:terminal_title) { @terminal_title }
     end.new

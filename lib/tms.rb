@@ -547,7 +547,7 @@ module Tms
         opts.on("-l", "--layout PATH", "Use a complete one-off layout document") { |value| @options[:layout] = value }
         opts.on("-A", "--append-window", "Append a window to the workspace session") { @options[:append_window] = true }
         opts.on("-C", "--directory PATH", "Launch as if invoked from PATH") { |value| @options[:launch_directory] = value }
-        opts.on("--recreate", "Kill and recreate an existing session") { @options[:recreate] = true }
+        opts.on("-R", "--recreate", "Kill and recreate an existing session") { @options[:recreate] = true }
         opts.on("--no-attach", "Create or reuse the session without entering it") { @options[:attach] = false }
         opts.on("-h", "--help", "Show help") do
           @out.puts opts
