@@ -490,6 +490,8 @@ module Tms
     def run
       parse!
       launch_directory = File.expand_path(@options[:launch_directory])
+      return list_presets(launch_directory) if @options[:list]
+
       identity = SessionName.resolve(launch_directory, git: @git)
 
       if @options[:append_window]
@@ -545,6 +547,8 @@ module Tms
         opts.on("-p", "--preset NAME", "Launch a named preset") { |value| @options[:preset] = value }
         opts.on("-f", "--file PATH", "Use a preset document") { |value| @options[:file] = value }
         opts.on("-l", "--layout PATH", "Use a complete one-off layout document") { |value| @options[:layout] = value }
+        opts.on("-L", "--list", "List available presets") { @options[:list] = true }
+        opts.on("--verbose", "Show pane structure when listing") { @options[:verbose] = true }
         opts.on("-A", "--append-window", "Append a window to the workspace session") { @options[:append_window] = true }
         opts.on("-C", "--directory PATH", "Launch as if invoked from PATH") { |value| @options[:launch_directory] = value }
         opts.on("-R", "--recreate", "Kill and recreate an existing session") { @options[:recreate] = true }
@@ -556,6 +560,9 @@ module Tms
       end
 
       parser.parse!(@argv)
+      raise ConfigError, "--list cannot be combined with --layout" if @options[:list] && @options[:layout]
+      raise ConfigError, "--list cannot be combined with --recreate" if @options[:list] && @options[:recreate]
+      raise ConfigError, "--list cannot be combined with --append-window" if @options[:list] && @options[:append_window]
       raise ConfigError, "--layout cannot be combined with --preset or --file" if @options[:layout] && (@options[:preset] || @options[:file])
       raise ConfigError, "--append-window cannot be combined with --recreate" if @options[:append_window] && @options[:recreate]
       raise ConfigError, "Unexpected arguments: #{@argv.join(" ")}" unless @argv.empty?
@@ -575,6 +582,67 @@ module Tms
       document = PresetDocument.load_file(preset_path)
       preset = PresetSelection.select(document, @options[:preset])
       SelectedLayout.new(layout: preset.layout, window_name: preset.name)
+    end
+
+    def list_presets(launch_directory)
+      preset_path = PresetLookup.find(explicit_file: @options[:file], launch_directory: launch_directory)
+
+      unless File.file?(preset_path)
+        @err.puts "No preset file found."
+        @err.puts "Run 'make config' to create one at ~/.config/tmux-workspace/layouts.yml"
+        return 0
+      end
+
+      document = PresetDocument.load_file(preset_path)
+
+      if @options[:preset]
+        print_preset(PresetSelection.named(document, @options[:preset]))
+      else
+        @out.puts "Available presets (from #{preset_path}):"
+        document.presets.each_value { |preset| print_preset(preset) }
+      end
+
+      0
+    end
+
+    def print_preset(preset)
+      unless @options[:verbose]
+        @out.puts "  #{preset.name}"
+        return
+      end
+
+      @out.puts "#{preset.name}:"
+      print_layout_node(preset.layout, "  ")
+    end
+
+    def print_layout_node(layout, prefix, connector = nil, last = true)
+      branch_prefix = connector ? "#{prefix}#{connector}" : prefix
+      @out.puts "#{branch_prefix}#{layout_label(layout)}"
+      return if layout.leaf?
+
+      child_prefix = if connector
+                       "#{prefix}#{last ? "    " : "│   "}"
+                     else
+                       prefix
+                     end
+      layout.panes.each_with_index do |pane, index|
+        child_last = index == layout.panes.length - 1
+        print_layout_node(pane, child_prefix, child_last ? "└── " : "├── ", child_last)
+      end
+    end
+
+    def layout_label(layout)
+      if layout.branch?
+        label = layout.split
+        label = "#{label} [#{layout.ratio.join(", ")}]" if layout.ratio
+        return label
+      end
+
+      title = layout.title.to_s unless layout.title.nil? || layout.title.to_s.empty?
+      command = layout.command.to_s unless layout.command.nil? || layout.command.to_s.empty?
+      return "#{title}: #{command}" if title && command
+
+      title || command || "shell"
     end
 
     def layout_window_name(path)

@@ -315,6 +315,223 @@ class TmsTest < Minitest::Test
     assert_includes out.string, "-R, --recreate"
   end
 
+  def test_help_lists_preset_list_options
+    out = StringIO.new
+
+    assert_raises(SystemExit) do
+      Tms::CLI.new(
+        ["--help"],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      ).run
+    end
+
+    assert_includes out.string, "-L, --list"
+    assert_includes out.string, "--verbose"
+  end
+
+  def test_list_prints_available_preset_names_without_touching_tmux
+    Dir.mktmpdir("tms-layout") do |dir|
+      write_preset_file(dir)
+      out = StringIO.new
+      tmux = fake_tmux(session_exists: true)
+
+      cli = Tms::CLI.new(
+        ["--list", "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes out.string, "Available presets (from #{File.join(dir, ".tmux-layout.yml")}):"
+      assert_includes out.string, "  default\n"
+      assert_includes out.string, "  logs\n"
+      assert_equal [], tmux.steps
+      assert_equal false, tmux.entered?
+    end
+  end
+
+  def test_list_verbose_prints_preset_structure_tree
+    Dir.mktmpdir("tms-layout") do |dir|
+      write_preset_file(dir)
+      out = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["--list", "--verbose", "--preset", "default", "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes out.string, "default:\n"
+      assert_includes out.string, "  horizontal [30, 70]\n"
+      assert_includes out.string, "  ├── editor: nvim\n"
+      assert_includes out.string, "  └── vertical [60, 40]\n"
+      assert_includes out.string, "      ├── server: pnpm dev\n"
+      assert_includes out.string, "      └── shell\n"
+    end
+  end
+
+  def test_list_named_preset_only_prints_that_preset
+    Dir.mktmpdir("tms-layout") do |dir|
+      write_preset_file(dir)
+      out = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["--list", "--preset", "logs", "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_equal "  logs\n", out.string
+    end
+  end
+
+  def test_list_missing_preset_file_prints_hint_to_stderr
+    Dir.mktmpdir("tms-layout") do |dir|
+      err = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["--list", "--file", File.join(dir, "missing.yml"), "-C", dir],
+        env: {},
+        out: StringIO.new,
+        err: err,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes err.string, "No preset file found."
+      assert_includes err.string, "Run 'make config'"
+    end
+  end
+
+  def test_list_cannot_be_combined_with_layout
+    err = StringIO.new
+
+    cli = Tms::CLI.new(
+      ["--list", "--layout", "layout.yml"],
+      env: {},
+      out: StringIO.new,
+      err: err,
+      stdin: StringIO.new,
+      tmux: fake_tmux(session_exists: false),
+      git: fake_git(false)
+    )
+
+    assert_equal 1, cli.run
+    assert_includes err.string, "--list cannot be combined with --layout"
+  end
+
+  def test_list_cannot_be_combined_with_recreate
+    err = StringIO.new
+
+    cli = Tms::CLI.new(
+      ["--list", "--recreate"],
+      env: {},
+      out: StringIO.new,
+      err: err,
+      stdin: StringIO.new,
+      tmux: fake_tmux(session_exists: false),
+      git: fake_git(false)
+    )
+
+    assert_equal 1, cli.run
+    assert_includes err.string, "--list cannot be combined with --recreate"
+  end
+
+  def test_list_unknown_preset_reports_selection_error
+    Dir.mktmpdir("tms-layout") do |dir|
+      write_preset_file(dir)
+      err = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["--list", "--preset", "missing", "-C", dir],
+        env: {},
+        out: StringIO.new,
+        err: err,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      )
+
+      assert_equal 1, cli.run
+      assert_includes err.string, 'Unknown preset "missing"'
+    end
+  end
+
+  def test_list_uses_explicit_preset_file
+    Dir.mktmpdir("tms-layout") do |dir|
+      preset_path = File.join(dir, "custom.yml")
+      File.write(preset_path, <<~YAML)
+        presets:
+          custom:
+            layout:
+              command: ruby -v
+      YAML
+      out = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["--list", "--file", preset_path, "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes out.string, "Available presets (from #{preset_path}):"
+      assert_includes out.string, "  custom\n"
+    end
+  end
+
+  def test_list_verbose_prints_leaf_without_title_using_command_label
+    Dir.mktmpdir("tms-layout") do |dir|
+      File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+        presets:
+          default:
+            layout:
+              command: ruby -v
+      YAML
+      out = StringIO.new
+
+      cli = Tms::CLI.new(
+        ["--list", "--verbose", "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: fake_tmux(session_exists: false),
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes out.string, "default:\n"
+      assert_includes out.string, "  ruby -v\n"
+      refute_includes out.string, ": ruby -v"
+    end
+  end
+
   def test_append_window_cannot_be_combined_with_recreate
     err = StringIO.new
     cli = Tms::CLI.new(
@@ -616,5 +833,28 @@ class TmsTest < Minitest::Test
         true
       end
     end.new
+  end
+
+  def write_preset_file(dir)
+    File.write(File.join(dir, ".tmux-layout.yml"), <<~YAML)
+      presets:
+        default:
+          layout:
+            split: horizontal
+            ratio: [30, 70]
+            panes:
+              - title: editor
+                command: nvim
+              - split: vertical
+                ratio: [60, 40]
+                panes:
+                  - title: server
+                    command: pnpm dev
+                  - title: shell
+        logs:
+          layout:
+            title: logs
+            command: tail -f app.log
+    YAML
   end
 end
