@@ -50,6 +50,22 @@ class TmsTest < Minitest::Test
     assert_equal "repo_repo-feature", name.tmux_name
   end
 
+  def test_names_linked_worktree_from_branch_when_available
+    git = fake_git(
+      true,
+      common_dir: "/repo/.git",
+      worktrees: [
+        { path: "/repo", primary: true, branch: "main" },
+        { path: "/tmp/worktrees/5413/repo", primary: false, branch: "dev-title" }
+      ]
+    )
+
+    name = Tms::SessionName.resolve("/tmp/worktrees/5413/repo/apps/title", git: git)
+
+    assert_equal "repo:dev-title", name.display_name
+    assert_equal "repo_dev-title", name.tmux_name
+  end
+
   def test_terminal_title_sequence_uses_sanitized_display_name
     assert_equal "\033]0;repo:main\a", Tms::TerminalTitle.sequence("repo:\033main\a")
   end

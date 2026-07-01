@@ -44,7 +44,7 @@ module Tms
       raise ConfigError, "Could not resolve git worktree root" unless current && primary
 
       primary_name = File.basename(primary[:path])
-      current_name = current[:primary] ? "main" : File.basename(current[:path])
+      current_name = current[:primary] ? "main" : current[:branch] || File.basename(current[:path])
       display = "#{primary_name}:#{current_name}"
 
       SessionIdentity.new(display_name: display, tmux_name: safe(display))
@@ -96,6 +96,8 @@ module Tms
           current = { path: line.sub("worktree ", ""), primary: false }
         elsif line.start_with?("commondir ") && current
           current[:primary] = File.expand_path(line.sub("commondir ", "")) == File.expand_path(common)
+        elsif line.start_with?("branch ") && current
+          current[:branch] = line.sub("branch ", "").sub(%r{\Arefs/heads/}, "")
         end
       end
 
