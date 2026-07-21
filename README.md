@@ -20,6 +20,33 @@ Use `-A, --append-window` to add a new window to the target Workspace Session in
 
 When run inside tmux, `tms` switches the current client to the target session. Outside tmux, it attaches normally.
 
+### Subcommands
+
+**`tms ls`** — Show all tmux sessions, same as `tmux ls`.
+
+```
+$ tms ls
+my_project: 2 windows (created Mon Jul 20 12:00:00 2026)
+other_session: 1 windows (created Mon Jul 20 13:00:00 2026)
+```
+
+**`tms check`** — Test whether the current directory already has a tmux session.
+
+```sh
+tms check                     # check current directory
+tms check -C ~/other/project  # check a specific directory
+```
+
+Output:
+
+```
+$ tms check -C ~/Documents/projects/tmux-workspace
+Session tmux-workspace (tmux-workspace) exists
+
+$ tms check -C /tmp/unknown
+No session for unknown (unknown)
+```
+
 ## Preset Lookup
 
 Preset documents are discovered in this order:

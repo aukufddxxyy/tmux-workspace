@@ -5,6 +5,7 @@
 - Run the full check with `make check`; it expands to `ruby test/tms_test.rb`, `ruby -c lib/tms.rb`, and `ruby -c bin/tms`.
 - Run the focused test suite directly with `ruby test/tms_test.rb`; there is no Gemfile, gemspec, Bundler setup, CI config, or external test service.
 - Use `bin/tms --help` as the safe CLI smoke check. Normal launches may create, attach, switch, or kill tmux sessions, especially with `-R` / `--recreate`.
+- Use `bin/tms ls` and `bin/tms check` as safe read-only subcommands that don't modify tmux state.
 - `make install`, `make uninstall`, and `make config` are operational targets. `make config` copies `.tmux-layout.example.yml` to ignored `.tmux-layout.yml` only when the file is missing.
 - Do not invent `bundle`, `npm`, `pnpm`, lint, formatter, typecheck, or codegen commands unless a future manifest/config adds them.
 
