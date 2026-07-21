@@ -384,6 +384,11 @@ module Tms
       system("tmux", "has-session", "-t", name, out: File::NULL, err: File::NULL)
     end
 
+    def list_sessions
+      output, error, status = Open3.capture3("tmux", "ls")
+      status.success? ? output.strip : error.strip
+    end
+
     def kill_session(name)
       run!("tmux", "kill-session", "-t", name)
     end
@@ -481,6 +486,7 @@ module Tms
       @tmux = tmux
       @git = git
       @env = env
+      @subcommand = nil
       @options = {
         launch_directory: Dir.pwd,
         attach: true,
@@ -490,7 +496,17 @@ module Tms
     end
 
     def run
+      @subcommand = @argv.first if @argv.first && !@argv.first.start_with?("-")
+      @argv.shift if @subcommand
+
       parse!
+
+      case @subcommand
+      when "ls"
+        return handle_ls
+      when "check"
+        return handle_check
+      end
       launch_directory = File.expand_path(@options[:launch_directory])
       return list_presets(launch_directory) if @options[:list]
 
@@ -543,9 +559,32 @@ module Tms
 
     private
 
+    def handle_ls
+      @out.puts @tmux.list_sessions
+      0
+    end
+
+    def handle_check
+      launch_directory = File.expand_path(@options[:launch_directory])
+      identity = SessionName.resolve(launch_directory, git: @git)
+
+      if @tmux.session_exists?(identity.tmux_name)
+        @out.puts "Session #{identity.display_name} (#{identity.tmux_name}) exists"
+      else
+        @out.puts "No session for #{identity.display_name} (#{identity.tmux_name})"
+      end
+      0
+    end
+
     def parse!
       parser = OptionParser.new do |opts|
-        opts.banner = "Usage: tms [options]"
+        opts.banner = "Usage: tms [subcommand] [options]"
+        opts.separator ""
+        opts.separator "Subcommands:"
+        opts.separator "  ls                    List tmux sessions (like tmux ls)"
+        opts.separator "  check                 Check if current directory has a session"
+        opts.separator ""
+        opts.separator "Options:"
         opts.on("-p", "--preset NAME", "Launch a named preset") { |value| @options[:preset] = value }
         opts.on("-f", "--file PATH", "Use a preset document") { |value| @options[:file] = value }
         opts.on("-l", "--layout PATH", "Use a complete one-off layout document") { |value| @options[:layout] = value }

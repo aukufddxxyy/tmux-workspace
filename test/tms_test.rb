@@ -812,6 +812,83 @@ class TmsTest < Minitest::Test
     end
   end
 
+  def test_ls_subcommand_prints_tmux_sessions
+    tmux = fake_tmux(session_exists: false, list_sessions: "my_session: 1 windows (created Mon Jul 20 12:00:00 2026)")
+    out = StringIO.new
+
+    cli = Tms::CLI.new(
+      ["ls"],
+      env: {},
+      out: out,
+      err: StringIO.new,
+      stdin: StringIO.new,
+      tmux: tmux,
+      git: fake_git(false)
+    )
+
+    assert_equal 0, cli.run
+    assert_includes out.string, "my_session"
+    assert_includes out.string, "1 windows"
+  end
+
+  def test_ls_subcommand_with_no_sessions
+    tmux = fake_tmux(session_exists: false, list_sessions: "no server running on /tmp/tmux-...")
+    out = StringIO.new
+
+    cli = Tms::CLI.new(
+      ["ls"],
+      env: {},
+      out: out,
+      err: StringIO.new,
+      stdin: StringIO.new,
+      tmux: tmux,
+      git: fake_git(false)
+    )
+
+    assert_equal 0, cli.run
+    assert_includes out.string, "no server running"
+  end
+
+  def test_check_reports_existing_session
+    tmux = fake_tmux(session_exists: true)
+    out = StringIO.new
+    Dir.mktmpdir("check-test") do |dir|
+      cli = Tms::CLI.new(
+        ["check", "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes out.string, "exists"
+      assert_includes out.string, "check-test"
+    end
+  end
+
+  def test_check_reports_no_session
+    tmux = fake_tmux(session_exists: false)
+    out = StringIO.new
+    Dir.mktmpdir("check-test") do |dir|
+      cli = Tms::CLI.new(
+        ["check", "-C", dir],
+        env: {},
+        out: out,
+        err: StringIO.new,
+        stdin: StringIO.new,
+        tmux: tmux,
+        git: fake_git(false)
+      )
+
+      assert_equal 0, cli.run
+      assert_includes out.string, "No session"
+      assert_includes out.string, "check-test"
+    end
+  end
+
   private
 
   def fake_git(inside, common_dir: nil, worktrees: [])
@@ -822,16 +899,18 @@ class TmsTest < Minitest::Test
     end.new
   end
 
-  def fake_tmux(session_exists:)
+  def fake_tmux(session_exists:, list_sessions: "mock_session: 1 windows (created ...)")
     Class.new do
-      define_method(:initialize) do
+      define_method(:initialize) do |ls|
         @session_exists = session_exists
         @entered = false
         @steps = []
         @killed_sessions = []
+        @list_sessions = ls
       end
 
       define_method(:session_exists?) { |_name| @session_exists }
+      define_method(:list_sessions) { @list_sessions }
       define_method(:kill_session) { |name| @killed_sessions << name; @session_exists = false }
       define_method(:enter_session) { |_name| @entered = true }
       define_method(:entered?) { @entered }
@@ -840,7 +919,7 @@ class TmsTest < Minitest::Test
       define_method(:killed_sessions) { @killed_sessions }
       define_method(:set_terminal_title) { |session, title| @terminal_title = [session, title] }
       define_method(:terminal_title) { @terminal_title }
-    end.new
+    end.new(list_sessions)
   end
 
   def tty_string_io
